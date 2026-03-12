@@ -1,10 +1,8 @@
 fastapi
 uvicorn
 websockets
-psycopg2-binary
 sqlalchemy
-redis
 pydantic
 python-dotenv
-google-genai
+google-adk
 python-multipart
