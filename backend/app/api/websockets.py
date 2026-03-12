@@ -25,11 +25,10 @@ async def live_device_endpoint(websocket: WebSocket, device_uid: str, db: Sessio
         await websocket.close(code=4003, reason="Unregistered device")
         return
 
-    # In a real system, you'd get the active tracking session to know the app state
-    active_session = db.query(DBSession).filter(DBSession.device_id == device.id, DBSession.is_active == True).first()
+    from app.models.enums import SessionStatus
+    active_session = db.query(DBSession).filter(DBSession.device_id == device.id, DBSession.status != SessionStatus.ended).first()
     if not active_session:
-        # If no session, create a mock one for testing
-        active_session = DBSession(device_id=device.id, adk_session_key=f"session_{device_uid}", is_active=True)
+        active_session = DBSession(device_id=device.id, adk_session_key=f"session_{device_uid}", status=SessionStatus.active, household_id=device.household_id)
         db.add(active_session)
         db.commit()
 
@@ -40,10 +39,10 @@ async def live_device_endpoint(websocket: WebSocket, device_uid: str, db: Sessio
     user_id = str(device.household_id)
     session_id = active_session.adk_session_key
 
-    # Build the google-adk specific primitives
     agent, run_config = RunConfigFactory.build_config(active_session, settings)
     
-    runner = Runner(app_name="kids-pokedex", agent=agent, session_service=session_service)
+    # Consistent app_name to avoid runner warnings
+    runner = Runner(app_name="agents", agent=agent, session_service=session_service)
     live_request_queue = LiveRequestQueue()
 
     async def upstream_task():
@@ -56,7 +55,6 @@ async def live_device_endpoint(websocket: WebSocket, device_uid: str, db: Sessio
                 if event.type == "session_start":
                      await websocket.send_json(ServerLiveEvent(type="ack", payload={"status": "session_started"}).model_dump())
                 elif event.type == "audio_chunk":
-                     # Client sends b64 pcm, stream it into ADK Live
                      b64 = event.payload.get("data_base64") if event.payload else ""
                      if b64:
                          decoded = base64.b64decode(b64)
@@ -68,6 +66,14 @@ async def live_device_endpoint(websocket: WebSocket, device_uid: str, db: Sessio
                          decoded = base64.b64decode(b64)
                          content = types.Content(parts=[types.Part(inline_data=types.Blob(mime_type="image/jpeg", data=decoded))])
                          live_request_queue.send_content(content)
+                elif event.type == "activity_start":
+                     live_request_queue.send_activity_start()
+                elif event.type == "activity_end":
+                     live_request_queue.send_activity_end()
+                elif event.type == "interrupt":
+                     # ADK handles interruption via activity_start generally, 
+                     # but we can also signal explicit interrupt if needed.
+                     live_request_queue.send_activity_start()
                 elif event.type == "heartbeat":
                      await websocket.send_json(ServerLiveEvent(type="ack").model_dump())
                      
@@ -77,7 +83,7 @@ async def live_device_endpoint(websocket: WebSocket, device_uid: str, db: Sessio
             print(f"Upstream task exception: {e}")
 
     async def downstream_task():
-        """Receives Events from run_live() and sends to WebSocket."""
+        """Receives Events from run_live() and sends to WebSocket (wrapped in ServerLiveEvent)."""
         try:
             async for adk_event in runner.run_live(
                 user_id=user_id,
@@ -85,15 +91,47 @@ async def live_device_endpoint(websocket: WebSocket, device_uid: str, db: Sessio
                 live_request_queue=live_request_queue,
                 run_config=run_config
             ):
-                event_json = adk_event.model_dump_json(exclude_none=True, by_alias=True)
-                # Note: Currently forwarding raw ADK event json. Client will need to parse ServerLiveEvents appropriately.
-                await websocket.send_text(event_json)
+                # 1. Check for global interruption flag (User spoke over Model)
+                if hasattr(adk_event, 'interrupted') and adk_event.interrupted:
+                    await websocket.send_json(ServerLiveEvent(type="interrupted").model_dump())
+                    continue
+
+                if hasattr(adk_event, 'server_content') and adk_event.server_content:
+                    sc = adk_event.server_content
+                    
+                    # 2. Check for content-level interruption
+                    if sc.interrupted:
+                        await websocket.send_json(ServerLiveEvent(type="interrupted").model_dump())
+                    
+                    if sc.model_turn:
+                        for part in sc.model_turn.parts:
+                            # 3. Audio Delivery (24kHz from Gemini)
+                            if part.inline_data:
+                                audio_b64 = base64.b64encode(part.inline_data.data).decode('utf-8')
+                                await websocket.send_json(ServerLiveEvent(
+                                    type="audio_out", 
+                                    payload={"data_base64": audio_b64}
+                                ).model_dump())
+                            
+                            # 4. Transcripts
+                            if part.text:
+                                await websocket.send_json(ServerLiveEvent(
+                                    type="transcript_out", 
+                                    payload={"text": part.text, "is_partial": True, "speaker": "agent"}
+                                ).model_dump())
+
+                    if sc.turn_complete:
+                        await websocket.send_json(ServerLiveEvent(type="turn_complete").model_dump())
+
+                elif hasattr(adk_event, 'tool_call'):
+                    # Handle tool calls if any are defined later
+                    pass
+                
         except Exception as e:
             print(f"Downstream task exception: {e}")
+            await websocket.send_json(ServerLiveEvent(type="error", payload={"detail": str(e)}).model_dump())
 
-    # Start the dual concurrent Bidi-streaming loop
     try:
         await asyncio.gather(upstream_task(), downstream_task(), return_exceptions=True)
     finally:
-        # Phase 4: Session Termination
         live_request_queue.close()

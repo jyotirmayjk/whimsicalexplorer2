@@ -21,14 +21,15 @@
 #define I2S_SPK_DOUT 25
 
 // Audio settings required by Gemini Live 
-#define SAMPLE_RATE 16000
+#define MIC_SAMPLE_RATE 16000
+#define SPK_SAMPLE_RATE 24000
 #define BITS_PER_SAMPLE I2S_BITS_PER_SAMPLE_16BIT
 
 bool initAudio() {
     // 1. Configure the Microphone (RX)
     i2s_config_t i2s_config_rx = {
         .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
-        .sample_rate = SAMPLE_RATE,
+        .sample_rate = MIC_SAMPLE_RATE,
         .bits_per_sample = BITS_PER_SAMPLE,
         .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
         .communication_format = I2S_COMM_FORMAT_STAND_I2S,
@@ -57,7 +58,7 @@ bool initAudio() {
     // 2. Configure the Speaker (TX)
     i2s_config_t i2s_config_tx = {
         .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
-        .sample_rate = SAMPLE_RATE,
+        .sample_rate = SPK_SAMPLE_RATE,
         .bits_per_sample = BITS_PER_SAMPLE,
         .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
         .communication_format = I2S_COMM_FORMAT_STAND_I2S,
@@ -75,15 +76,15 @@ bool initAudio() {
     };
 
     if (i2s_driver_install(I2S_PORT_TX, &i2s_config_tx, 0, NULL) != ESP_OK) {
-        Serial.println("Error installing I2S TX driver.");
+        Serial.println("[I2S] Error installing TX driver.");
         return false;
     }
     if (i2s_set_pin(I2S_PORT_TX, &pin_config_tx) != ESP_OK) {
-        Serial.println("Error setting I2S TX pins.");
+        Serial.println("[I2S] Error setting TX pins.");
         return false;
     }
 
-    Serial.println("I2S Audio interface initialized successfully.");
+    Serial.println("[I2S] Audio interface (16k In / 24k Out) initialized.");
     return true;
 }
 

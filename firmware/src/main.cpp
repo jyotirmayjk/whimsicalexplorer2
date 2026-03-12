@@ -8,22 +8,25 @@
 #include "audio_config.h"
 
 // ---------------------------------------------------------------- //
-// Configuration
+// Configuration - Update these for your local environment
 // ---------------------------------------------------------------- //
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
+const char* ssid = "YOUR_WIFI_SSID";         // <--- CHANGE ME
+const char* password = "YOUR_WIFI_PASSWORD"; // <--- CHANGE ME
 
 // Replace with your local machine's IP address where FastAPI is running
-const char* host_ip = "192.168.1.100"; 
+// Run 'ifconfig' (Mac/Linux) or 'ipconfig' (Windows) to find it
+const char* host_ip = "192.168.1.100";      // <--- CHANGE ME
 const int port = 8000;
-const char* ws_url = "/api/v1/device/live?device_uid=ESP32_TOY_001";
+const char* device_uid = "ESP32_TOY_001";
+
+// Constructed URLs
+String ws_url = String("/api/v1/device/live?device_uid=") + device_uid;
 String upload_url = String("http://") + host_ip + ":" + port + "/api/v1/device/media/image";
 
 WebSocketsClient webSocket;
 
-// Hardware Mock
-const int BUTTON_PIN = 12;
-bool is_recording = false;
+// Hardware State
+const int BUTTON_PIN = 12; // GPIO for pushbutton (switches to GND)bool is_recording = false;
 bool was_button_pressed = false;
 
 // ---------------------------------------------------------------- //
@@ -169,10 +172,15 @@ void loop() {
     
     if (current_button_state && !was_button_pressed) {
         // Just Pressed: Interrupt Server + Upload Image Context
-        Serial.println("[BTN] Pressed! Sending interrupt constraint.");
-        StaticJsonDocument<200> doc; doc["type"] = "interrupt";
-        String wsOutput; serializeJson(doc, wsOutput);
-        webSocket.sendTXT(wsOutput);
+        Serial.println("[BTN] Pressed! Sending interrupt and activity_start.");
+        
+        StaticJsonDocument<200> interrupt_doc; interrupt_doc["type"] = "interrupt";
+        String wsInterrupt; serializeJson(interrupt_doc, wsInterrupt);
+        webSocket.sendTXT(wsInterrupt);
+
+        StaticJsonDocument<200> activity_doc; activity_doc["type"] = "activity_start";
+        String wsActivity; serializeJson(activity_doc, wsActivity);
+        webSocket.sendTXT(wsActivity);
         
         i2s_zero_dma_buffer(I2S_PORT_TX); // Local ducking
         captureAndUploadImage();
@@ -188,7 +196,12 @@ void loop() {
         
     } else if (!current_button_state && was_button_pressed) {
         // Just Released: End turn
-        Serial.println("[BTN] Released! Audio turn complete.");
+        Serial.println("[BTN] Released! Sending activity_end.");
+        
+        StaticJsonDocument<200> activity_doc; activity_doc["type"] = "activity_end";
+        String wsActivity; serializeJson(activity_doc, wsActivity);
+        webSocket.sendTXT(wsActivity);
+
         is_recording = false;
         was_button_pressed = false;
     }
