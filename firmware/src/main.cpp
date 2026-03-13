@@ -58,15 +58,25 @@ void captureAndUploadImage() {
     head += "Content-Type: image/jpeg\r\n\r\n";
     String tail = "\r\n--" + boundary + "--\r\n";
     
-    // Send request
-    int httpResponseCode = http.sendRequest("POST", (uint8_t *)head.c_str(), head.length(), 
-                            fb->buf, fb->len, 
-                            (uint8_t *)tail.c_str(), tail.length());
-                            
-    if (httpResponseCode > 0) {
-        Serial.printf("[HTTP] Upload successful, code: %d\n", httpResponseCode);
+    // Allocate full buffer for multipart request
+    size_t total_len = head.length() + fb->len + tail.length();
+    uint8_t * body = (uint8_t *)malloc(total_len);
+    if (body) {
+        memcpy(body, head.c_str(), head.length());
+        memcpy(body + head.length(), fb->buf, fb->len);
+        memcpy(body + head.length() + fb->len, tail.c_str(), tail.length());
+        
+        // Send single buffer
+        int httpResponseCode = http.sendRequest("POST", body, total_len);
+                                
+        if (httpResponseCode > 0) {
+            Serial.printf("[HTTP] Upload successful, code: %d\n", httpResponseCode);
+        } else {
+            Serial.printf("[HTTP] Upload failed, error: %s\n", http.errorToString(httpResponseCode).c_str());
+        }
+        free(body);
     } else {
-        Serial.printf("[HTTP] Upload failed, error: %s\n", http.errorToString(httpResponseCode).c_str());
+        Serial.println("[HTTP] Failed to allocate memory for image upload.");
     }
     
     http.end();
