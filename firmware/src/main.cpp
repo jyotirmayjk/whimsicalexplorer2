@@ -26,7 +26,8 @@ String upload_url = String("http://") + host_ip + ":" + port + "/api/v1/device/m
 WebSocketsClient webSocket;
 
 // Hardware State
-const int BUTTON_PIN = 12; // GPIO for pushbutton (switches to GND)bool is_recording = false;
+const int BUTTON_PIN = 12; // GPIO for pushbutton (switches to GND)
+bool is_recording = false;
 bool was_button_pressed = false;
 
 // ---------------------------------------------------------------- //
