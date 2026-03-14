@@ -49,7 +49,7 @@ class RunConfigFactory:
         # Build google-adk specific primitives
         agent = Agent(
             name=f"toddler_companion_{session.id}",
-            model="models/gemini-2.0-flash-exp",
+            model="gemini-2.0-flash-001",
             description="Toddler companion and educator",
             instruction=system_instruction
         )

@@ -21,10 +21,17 @@ app.include_router(websockets.router, prefix=f"{settings.API_V1_STR}/device", ta
 
 @app.on_event("startup")
 def on_startup():
+    import os
     from app.models.db_models import Base
     from app.db.session import engine
     # Create all DB tables (for local testing without alembic)
     Base.metadata.create_all(bind=engine)
+    
+    # Configure the Google GenAI client for ADK to use Vertex AI
+    # The ADK's GoogleLLM reads these env vars internally
+    os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "TRUE"
+    os.environ["GOOGLE_CLOUD_PROJECT"] = settings.GOOGLE_CLOUD_PROJECT
+    os.environ["GOOGLE_CLOUD_LOCATION"] = settings.GOOGLE_CLOUD_LOCATION
 
 @app.get("/healthz")
 def health_check():

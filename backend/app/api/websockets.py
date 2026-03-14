@@ -45,6 +45,13 @@ async def live_device_endpoint(websocket: WebSocket, device_uid: str, db: Sessio
     runner = Runner(app_name="agents", agent=agent, session_service=session_service)
     live_request_queue = LiveRequestQueue()
 
+    # Create the ADK session in InMemorySessionService so run_live() can find it
+    await session_service.create_session(
+        app_name="agents",
+        user_id=user_id,
+        session_id=session_id,
+    )
+
     async def upstream_task():
         """Receives messages from WebSocket and sends to LiveRequestQueue."""
         try:
@@ -59,6 +66,11 @@ async def live_device_endpoint(websocket: WebSocket, device_uid: str, db: Sessio
                      if b64:
                          decoded = base64.b64decode(b64)
                          content = types.Content(parts=[types.Part(inline_data=types.Blob(mime_type="audio/pcm", data=decoded))])
+                         live_request_queue.send_content(content)
+                elif event.type == "text_message":
+                     txt = event.payload.get("text") if event.payload else ""
+                     if txt:
+                         content = types.Content(parts=[types.Part(text=txt)])
                          live_request_queue.send_content(content)
                 elif event.type == "image_frame":
                      b64 = event.payload.get("data_base64") if event.payload else ""

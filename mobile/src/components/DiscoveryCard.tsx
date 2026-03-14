@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import { colors, spacing, radii, typography } from '../../theme/theme';
+import { colors, spacing, radii, typography } from '../theme/theme';
 
 interface DiscoveryCardProps {
   name: string;

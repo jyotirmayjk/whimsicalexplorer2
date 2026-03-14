@@ -6,3 +6,5 @@ pydantic
 python-dotenv
 google-adk
 python-multipart
+pydantic-settings
+PyJWT
