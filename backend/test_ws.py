@@ -69,25 +69,46 @@ async def test_live_websocket():
             print("\n🗣️ 4. Sending mock text query to Vertex AI...")
             
             await websocket.send(json.dumps({
+                "type": "activity_start",
+                "payload": None
+            }))
+            
+            await websocket.send(json.dumps({
                 "type": "text_message",
                 "payload": {"text": "What is this?"}
             }))
             
+            await websocket.send(json.dumps({
+                "type": "activity_end",
+                "payload": None
+            }))
+            
             # Wait for response (transcript or audio)
             print("\n⏳ 5. Waiting for Google Vertex AI response (Story Mode)...")
+            audio_data = bytearray()
+            
             while True:
                 res = await websocket.recv()
                 msg = json.loads(res)
+                
                 if msg.get("type") == "transcript_out":
                     print(f"📖 Vertex AI Transcript: {msg['payload']['text']}")
                 elif msg.get("type") == "audio_out":
-                    print(f"🔊 Vertex AI returned Audio Data (Base64 length: {len(msg['payload']['data_base64'])})")
+                    data_b64 = msg['payload']['data_base64']
+                    audio_chunk = base64.b64decode(data_b64)
+                    audio_data.extend(audio_chunk)
+                    print(f"🔊 Received Audio Chunk: {len(audio_chunk)} bytes (Total: {len(audio_data)})")
                 elif msg.get("type") == "turn_complete":
                      print("✅ Vertex AI Turn Complete.")
                      break
                 elif msg.get("type") == "error":
                      print(f"❌ Error: {msg['payload']}")
                      break
+            
+            if audio_data:
+                with open("output_response.pcm", "wb") as f:
+                    f.write(audio_data)
+                print(f"\n💾 Saved {len(audio_data)} bytes of raw PCM audio to 'output_response.pcm'")
             
             print("\n🎉 Story Mode Socket ADK routing works perfectly!")
             
