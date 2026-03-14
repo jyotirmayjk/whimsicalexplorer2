@@ -10,6 +10,7 @@ from app.adk_runtime.run_config_factory import RunConfigFactory
 
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
+from google.adk.errors.already_exists_error import AlreadyExistsError
 from google.adk.agents.live_request_queue import LiveRequestQueue
 from google.genai import types
 
@@ -33,12 +34,24 @@ async def live_device_endpoint(websocket: WebSocket, device_uid: str, db: Sessio
 
     from app.models.enums import SessionStatus
     active_session = db.query(DBSession).filter(DBSession.device_id == device.id, DBSession.status != SessionStatus.ended).first()
+    settings = db.query(HouseholdSettings).filter(HouseholdSettings.household_id == device.household_id).first()
     if not active_session:
-        active_session = DBSession(device_id=device.id, adk_session_key=f"session_{device_uid}", status=SessionStatus.active, household_id=device.household_id)
+        active_session = DBSession(
+            device_id=device.id,
+            adk_session_key=f"session_{device_uid}",
+            status=SessionStatus.active,
+            household_id=device.household_id,
+            active_mode=settings.default_mode if settings else None,
+            voice_style=settings.voice_style if settings else None,
+        )
         db.add(active_session)
         db.commit()
-
-    settings = db.query(HouseholdSettings).filter(HouseholdSettings.household_id == device.household_id).first()
+    elif settings:
+        # Keep device sessions aligned with the latest app-selected household defaults.
+        active_session.active_mode = settings.default_mode
+        active_session.voice_style = settings.voice_style
+        db.add(active_session)
+        db.commit()
 
     await websocket.accept()
     print(f"[WS-TRACE] websocket accepted device_uid={device_uid} session_key={active_session.adk_session_key}")
@@ -54,11 +67,18 @@ async def live_device_endpoint(websocket: WebSocket, device_uid: str, db: Sessio
     live_request_queue = LiveRequestQueue()
 
     # Create the ADK session in InMemorySessionService so run_live() can find it
-    await session_service.create_session(
-        app_name="agents",
-        user_id=user_id,
-        session_id=session_id,
-    )
+    try:
+        await session_service.create_session(
+            app_name="agents",
+            user_id=user_id,
+            session_id=session_id,
+        )
+    except AlreadyExistsError:
+        logger.info(
+            "live_device_endpoint: reusing existing ADK session device_uid=%s session_id=%s",
+            device_uid,
+            session_id,
+        )
 
     async def upstream_task():
         """Receives messages from WebSocket and sends to LiveRequestQueue."""

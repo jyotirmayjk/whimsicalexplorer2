@@ -1,9 +1,13 @@
 // src/api/client.ts
 const BASE_URL = 'http://localhost:8000/api/v1'; // Defaulting to local dev, will parameterize on build
+let authToken: string | null = null;
 
 export const getAuthToken = async (): Promise<string | null> => {
-  // TODO: Use SecureStore or AsyncStorage to retrieve JWT
-  return null;
+  return authToken;
+};
+
+export const setAuthToken = (token: string | null) => {
+  authToken = token;
 };
 
 const request = async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {

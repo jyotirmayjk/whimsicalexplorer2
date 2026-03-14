@@ -1,11 +1,55 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, typography } from '../../theme/theme';
 import { ModeCard } from '../../components/ModeCard';
 import { DiscoveryCard } from '../../components/DiscoveryCard';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { bootstrapAppSession } from '../../api/bootstrap';
+
+const modeCopy = {
+  story: {
+    title: 'Story Mode',
+    description: 'Magical object stories and narration',
+  },
+  learn: {
+    title: 'Learn Mode',
+    description: 'Simple words and toddler facts',
+  },
+  explorer: {
+    title: 'Explorer Mode',
+    description: 'Playful discovery prompts',
+  },
+} as const;
 
 const HomeScreen = ({ navigation }: any) => {
+  const [currentMode, setCurrentMode] = useState<'story' | 'learn' | 'explorer'>('story');
+  const [loadingMode, setLoadingMode] = useState(true);
+
+  const loadCurrentMode = React.useCallback(async () => {
+    setLoadingMode(true);
+    try {
+      const { session, settings } = await bootstrapAppSession();
+      setCurrentMode(session.active_mode || settings.defaultMode);
+    } catch (_error) {
+      setCurrentMode('story');
+    } finally {
+      setLoadingMode(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCurrentMode();
+  }, [loadCurrentMode]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadCurrentMode();
+    }, [loadCurrentMode]),
+  );
+
+  const currentModeCopy = modeCopy[currentMode];
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
@@ -15,9 +59,9 @@ const HomeScreen = ({ navigation }: any) => {
 
       <Text style={styles.sectionTitle}>Current Mode</Text>
       <ModeCard
-        mode="story"
-        title="Story Mode"
-        description="Magical object stories and narration"
+        mode={currentMode}
+        title={loadingMode ? 'Loading Mode...' : currentModeCopy.title}
+        description={loadingMode ? 'Fetching backend session state' : currentModeCopy.description}
         isActive={true}
         onPress={() => {}}
       />

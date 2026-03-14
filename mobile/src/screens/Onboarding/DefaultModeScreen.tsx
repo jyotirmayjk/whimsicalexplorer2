@@ -3,17 +3,27 @@ import { View, Text, StyleSheet } from 'react-native';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { ModeCard, AppMode } from '../../components/ModeCard';
 import { colors, spacing, typography } from '../../theme/theme';
+import { startSession, updateSettings } from '../../api/endpoints';
 
 const DefaultModeScreen = ({ navigation }: any) => {
   const [selectedMode, setSelectedMode] = useState<AppMode | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const completeOnboarding = () => {
-    // Navigate back up to RootNavigator to swap out Onboarding for MainTabs
-    // Typically managed via App context/state, bypassing for skeleton scope natively via navigate
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'MainTabs' }],
-    });
+  const completeOnboarding = async () => {
+    if (!selectedMode) return;
+    setSaving(true);
+    try {
+      await updateSettings({ defaultMode: selectedMode });
+      await startSession({});
+      // Navigate back up to RootNavigator to swap out Onboarding for MainTabs
+      // Typically managed via App context/state, bypassing for skeleton scope natively via navigate
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'MainTabs' }],
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -46,8 +56,8 @@ const DefaultModeScreen = ({ navigation }: any) => {
       </View>
 
       <PrimaryButton 
-        label="Finish Setup" 
-        disabled={!selectedMode}
+        label={saving ? 'Finishing...' : 'Finish Setup'} 
+        disabled={!selectedMode || saving}
         onPress={completeOnboarding} 
         style={styles.button}
       />

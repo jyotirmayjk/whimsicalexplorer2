@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from app.core.config import settings
-from app.api import auth, settings as api_settings, discoveries, activity, devices, media, websockets
+from app.api import auth, settings as api_settings, discoveries, activity, devices, media, session, websockets
 import logging
 
 app = FastAPI(
@@ -12,6 +12,7 @@ app = FastAPI(
 # Core API Groupings
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
 app.include_router(api_settings.router, prefix=f"{settings.API_V1_STR}/app/settings", tags=["settings"])
+app.include_router(session.router, prefix=f"{settings.API_V1_STR}/app/session", tags=["session"])
 app.include_router(discoveries.router, prefix=f"{settings.API_V1_STR}/app/discoveries", tags=["discoveries"])
 app.include_router(activity.router, prefix=f"{settings.API_V1_STR}/app/activity", tags=["activity"])
 

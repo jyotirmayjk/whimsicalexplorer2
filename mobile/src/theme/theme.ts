@@ -9,7 +9,10 @@ export const colors = {
   border: '#DFE6E9',
   white: '#FFFFFF',
   error: '#D63031',
+  storyLight: '#FFF1F1',
+  primaryActive: '#E25555',
   explorerLight: '#F0F3F5',
+  learnLight: '#EAF4FF',
   learn: '#0984E3',
 };
 
@@ -28,6 +31,7 @@ export const radii = {
   lg: 16,
   xl: 32,
   full: 9999,
+  round: 9999,
 };
 
 export const typography = {

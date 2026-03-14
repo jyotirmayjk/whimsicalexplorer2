@@ -3,9 +3,11 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { colors, spacing, typography, radii } from '../../theme/theme';
 import { ChildSettings } from '../../types/settings';
+import { updateSettings } from '../../api/endpoints';
 
 const CategoryScreen = ({ navigation }: any) => {
   const [selectedCats, setSelectedCats] = useState<Set<string>>(new Set(['animals', 'toys', 'vehicles']));
+  const [saving, setSaving] = useState(false);
 
   const categories: { id: ChildSettings['allowedCategories'][0], title: string }[] = [
     { id: 'animals', title: 'Animals' },
@@ -42,9 +44,17 @@ const CategoryScreen = ({ navigation }: any) => {
       </ScrollView>
 
       <PrimaryButton 
-        label="Continue" 
-        disabled={selectedCats.size === 0}
-        onPress={() => navigation.navigate('DefaultMode')} 
+        label={saving ? 'Saving...' : 'Continue'} 
+        disabled={selectedCats.size === 0 || saving}
+        onPress={async () => {
+          setSaving(true);
+          try {
+            await updateSettings({ allowedCategories: Array.from(selectedCats) as ChildSettings['allowedCategories'] });
+            navigation.navigate('DefaultMode');
+          } finally {
+            setSaving(false);
+          }
+        }} 
         style={styles.button}
       />
     </View>

@@ -3,9 +3,11 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { colors, spacing, typography, radii } from '../../theme/theme';
 import { ChildSettings } from '../../types/settings';
+import { updateSettings } from '../../api/endpoints';
 
 const VoiceStyleScreen = ({ navigation }: any) => {
   const [selectedVoice, setSelectedVoice] = useState<ChildSettings['voiceStyle'] | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const voices = [
     { id: 'friendly_cartoon', title: 'Friendly Cartoon', desc: 'Energetic and playful tone' },
@@ -34,9 +36,18 @@ const VoiceStyleScreen = ({ navigation }: any) => {
       </View>
 
       <PrimaryButton 
-        label="Continue" 
-        disabled={!selectedVoice}
-        onPress={() => navigation.navigate('CategorySelection')} 
+        label={saving ? 'Saving...' : 'Continue'} 
+        disabled={!selectedVoice || saving}
+        onPress={async () => {
+          if (!selectedVoice) return;
+          setSaving(true);
+          try {
+            await updateSettings({ voiceStyle: selectedVoice });
+            navigation.navigate('CategorySelection');
+          } finally {
+            setSaving(false);
+          }
+        }} 
         style={styles.button}
       />
     </View>

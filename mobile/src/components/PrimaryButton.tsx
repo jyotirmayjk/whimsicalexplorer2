@@ -6,11 +6,17 @@ interface PrimaryButtonProps {
   label: string;
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
 }
 
-export const PrimaryButton: React.FC<PrimaryButtonProps> = ({ label, onPress, style }) => {
+export const PrimaryButton: React.FC<PrimaryButtonProps> = ({ label, onPress, style, disabled = false }) => {
   return (
-    <TouchableOpacity style={[styles.button, style]} onPress={onPress} activeOpacity={0.8}>
+    <TouchableOpacity
+      style={[styles.button, disabled && styles.buttonDisabled, style]}
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.8}
+    >
       <Text style={styles.text}>{label}</Text>
     </TouchableOpacity>
   );
@@ -29,6 +35,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 5,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
   text: {
     ...typography.button,

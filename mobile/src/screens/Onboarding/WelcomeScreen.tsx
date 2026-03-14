@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { colors, spacing, typography } from '../../theme/theme';
+import { ensureLogin } from '../../api/endpoints';
 
 const WelcomeScreen = ({ navigation }: any) => {
   return (
@@ -14,7 +15,10 @@ const WelcomeScreen = ({ navigation }: any) => {
       </View>
       <PrimaryButton 
         label="Get Started" 
-        onPress={() => navigation.navigate('VoiceStyle')} 
+        onPress={async () => {
+          await ensureLogin();
+          navigation.navigate('VoiceStyle');
+        }} 
         style={styles.button}
       />
     </View>

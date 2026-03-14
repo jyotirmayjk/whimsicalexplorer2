@@ -10,22 +10,15 @@ WS_BASE = "ws://localhost:8000/api/v1"
 DEVICE_UID = "TEST_ESP32_001"
 TEST_PROMPT = "Tell me a short fun fact about penguins for kids."
 RESPONSE_TIMEOUT_SECONDS = 45
+HOUSEHOLD_NAME = "Mobile Test Family"
 DEFAULT_MODE = "story"
-DEFAULT_OBJECT = "Happy Little Penguin"
-DEFAULT_CATEGORY = "animals"
-
-MODE_CONTEXT = {
-    "story": {"object": "Happy Little Penguin", "category": "animals"},
-    "learn": {"object": "Car", "category": "things"},
-    "explorer": {"object": "Tree", "category": "nature"},
-}
 
 async def test_live_websocket(prompt: str, mode: str, timeout: int):
     print("🎯 Goal: Validate Gemini Live on Vertex via ADK by sending a test prompt and waiting for model reply.")
     print("🤖 1. Registering fake toy device...")
     async with httpx.AsyncClient() as client:
         # We need an admin/household token first (mocking login)
-        login_res = await client.post(f"{API_BASE}/auth/login", json={"name": "Test Family"})
+        login_res = await client.post(f"{API_BASE}/auth/login", json={"name": HOUSEHOLD_NAME})
         token = login_res.json()["data"]["access_token"]
         
         # Register the device hardware under this family
@@ -59,27 +52,36 @@ async def test_live_websocket(prompt: str, mode: str, timeout: int):
             res = await websocket.recv()
             print(f"📥 Server Reply to Session Start: {res}")
             
-            # Since there isn't a dedicated endpoint for setting active mode from the mobile app yet, 
-            # let's manipulate the DB directly for testing Story Mode.
-            print(f"\n📝 3. Injecting '{mode.title()} Mode' context into DB...")
+            print("\n📝 3. Verifying app-created session context from DB...")
             from app.db.session import SessionLocal
             from app.models.db_models import Session, Device
-            from app.models.enums import AppMode, ObjectCategory
             
             db = SessionLocal()
             device = db.query(Device).filter(Device.device_uid == DEVICE_UID).first()
             if device:
                 active_sess = db.query(Session).filter(Session.device_id == device.id).order_by(Session.id.desc()).first()
                 if active_sess:
-                    mode_config = MODE_CONTEXT.get(mode, {})
-                    object_name = mode_config.get("object", DEFAULT_OBJECT)
-                    object_category = mode_config.get("category", DEFAULT_CATEGORY)
-
-                    active_sess.active_mode = AppMode(mode)
-                    active_sess.current_object_name = object_name
-                    active_sess.current_object_category = ObjectCategory(object_category)
-                    db.commit()
-                    print(f"✅ Set Context -> Mode: {active_sess.active_mode.value}, Object: {active_sess.current_object_name}")
+                    if active_sess.active_mode is None:
+                        raise RuntimeError("Active session has no mode. Complete onboarding or change mode in the app before running this test.")
+                    if active_sess.active_mode.value != mode:
+                        raise RuntimeError(
+                            f"Active session mode is '{active_sess.active_mode.value}', but test expected '{mode}'. "
+                            "Update the mode in the app or rerun with the matching --mode value."
+                        )
+                    if active_sess.current_object_name is None or active_sess.current_object_category is None:
+                        raise RuntimeError(
+                            "Active session is missing object/category context. Use the app flow that sets discovery context before running this test."
+                        )
+                    print(
+                        "✅ Using app-created context -> "
+                        f"Mode: {active_sess.active_mode.value}, "
+                        f"Object: {active_sess.current_object_name}, "
+                        f"Category: {active_sess.current_object_category.value}"
+                    )
+                else:
+                    raise RuntimeError("No active device session found for the test device. Start a session from the app before running this test.")
+            else:
+                raise RuntimeError("Test device is not registered to the current household.")
             db.close()
 
             # Now send some fake text over to trigger the LLM to 'look' at the context we set
@@ -147,7 +149,7 @@ if __name__ == "__main__":
         "--mode",
         choices=["story", "learn", "explorer"],
         default=DEFAULT_MODE,
-        help="App mode injected into DB session context.",
+        help="Expected app mode for verification only; the test no longer writes mode into DB.",
     )
     parser.add_argument(
         "--timeout",
