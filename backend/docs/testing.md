@@ -58,3 +58,94 @@ The primary blocker is finding a model that is both **Live API compatible** and 
 - [ ] Connect the ESP32 firmware to the backend.
 - [ ] Test real-time VAD (Voice Activity Detection) triggers.
 - [ ] Verify audio playback quality on the I2S speaker.
+
+---
+
+## Model Test Runbook (`test_ws.py` + Backend Server)
+
+This runbook is the concrete plan to validate model behavior end-to-end using the backend WebSocket gateway and `backend/test_ws.py`.
+
+Primary goal:
+- Verify Gemini Live on Vertex AI (through ADK `run_live`) by sending a deterministic test prompt and confirming a model reply (`transcript_out` and/or `audio_out`) followed by `turn_complete`.
+
+### 1. Preconditions
+
+- Backend dependencies installed (`pip install -r backend/requirements.txt`).
+- Valid model credentials configured in backend env (`GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, auth).
+- Backend starts without errors.
+- Database is available and writable.
+
+### 2. Start Backend Server
+
+From project root:
+
+```bash
+cd backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Expected:
+- REST API reachable at `http://localhost:8000/api/v1`.
+- WebSocket route reachable at `ws://localhost:8000/api/v1/device/live?device_uid=...`.
+
+### 3. Execute Baseline Script
+
+In a second terminal:
+
+```bash
+cd backend
+python test_ws.py
+```
+
+What this validates:
+- Device registration/login flow.
+- WebSocket connection and heartbeat ACK.
+- Session start ACK.
+- Text-triggered model turn via `activity_start -> text_message -> activity_end`.
+- Model output events (`transcript_out`, optional `audio_out`, `turn_complete`).
+
+Pass criteria:
+- Script reaches `turn_complete` without `error`.
+- Non-empty transcript for the active context.
+- If audio is emitted, `output_response.pcm` is written with non-zero bytes.
+
+Fail criteria:
+- WebSocket close `1008` (model access/policy issue).
+- `error` payload from backend or ADK runner.
+- No transcript/audio before timeout.
+
+### 4. Mode-by-Mode Validation Plan
+
+Run the same script 3 times, changing the injected DB context in `test_ws.py`:
+
+- Story Mode: `active_mode=story`, object `Happy Little Penguin`.
+- Learn Mode: `active_mode=learn`, object `Car`.
+- Explorer Mode: `active_mode=explorer`, object `Tree`.
+
+For each run, record:
+- Transcript content quality (mode alignment).
+- Time to first token/audio.
+- Turn completion status.
+- Any backend exceptions.
+
+### 5. Suggested Results Template
+
+Use this table for each mode:
+
+| Mode | Prompt | Transcript Matches Mode? | Audio Emitted? | Turn Complete? | Notes |
+|------|--------|---------------------------|----------------|----------------|-------|
+| Story | What is this? | Yes/No | Yes/No | Yes/No | ... |
+| Learn | What is this? | Yes/No | Yes/No | Yes/No | ... |
+| Explorer | What is this? | Yes/No | Yes/No | Yes/No | ... |
+
+### 6. Troubleshooting Branches
+
+- If `1008` persists on Vertex:
+  - Switch to a known Live-API-compatible model available to the project/region.
+  - Re-run baseline script to confirm infra path before mode-quality checks.
+- If text works but audio does not:
+  - Validate downstream `audio_out` events in backend logs.
+  - Confirm PCM handling and file write path in `test_ws.py`.
+- If session/device errors appear:
+  - Check auth/login response and `device_uid` consistency.
+  - Verify DB session row creation in `app/api/websockets.py`.

@@ -3,12 +3,25 @@ import websockets
 import json
 import httpx
 import base64
+import argparse
 
 API_BASE = "http://localhost:8000/api/v1"
 WS_BASE = "ws://localhost:8000/api/v1"
 DEVICE_UID = "TEST_ESP32_001"
+TEST_PROMPT = "Tell me a short fun fact about penguins for kids."
+RESPONSE_TIMEOUT_SECONDS = 45
+DEFAULT_MODE = "story"
+DEFAULT_OBJECT = "Happy Little Penguin"
+DEFAULT_CATEGORY = "animals"
 
-async def test_live_websocket():
+MODE_CONTEXT = {
+    "story": {"object": "Happy Little Penguin", "category": "animals"},
+    "learn": {"object": "Car", "category": "things"},
+    "explorer": {"object": "Tree", "category": "nature"},
+}
+
+async def test_live_websocket(prompt: str, mode: str, timeout: int):
+    print("🎯 Goal: Validate Gemini Live on Vertex via ADK by sending a test prompt and waiting for model reply.")
     print("🤖 1. Registering fake toy device...")
     async with httpx.AsyncClient() as client:
         # We need an admin/household token first (mocking login)
@@ -48,7 +61,7 @@ async def test_live_websocket():
             
             # Since there isn't a dedicated endpoint for setting active mode from the mobile app yet, 
             # let's manipulate the DB directly for testing Story Mode.
-            print("\n📝 3. Injecting 'Story Mode' context into DB...")
+            print(f"\n📝 3. Injecting '{mode.title()} Mode' context into DB...")
             from app.db.session import SessionLocal
             from app.models.db_models import Session, Device
             from app.models.enums import AppMode, ObjectCategory
@@ -58,15 +71,19 @@ async def test_live_websocket():
             if device:
                 active_sess = db.query(Session).filter(Session.device_id == device.id).order_by(Session.id.desc()).first()
                 if active_sess:
-                    active_sess.active_mode = AppMode.story
-                    active_sess.current_object_name = "Happy Little Penguin"
-                    active_sess.current_object_category = ObjectCategory.animals
+                    mode_config = MODE_CONTEXT.get(mode, {})
+                    object_name = mode_config.get("object", DEFAULT_OBJECT)
+                    object_category = mode_config.get("category", DEFAULT_CATEGORY)
+
+                    active_sess.active_mode = AppMode(mode)
+                    active_sess.current_object_name = object_name
+                    active_sess.current_object_category = ObjectCategory(object_category)
                     db.commit()
                     print(f"✅ Set Context -> Mode: {active_sess.active_mode.value}, Object: {active_sess.current_object_name}")
             db.close()
 
             # Now send some fake text over to trigger the LLM to 'look' at the context we set
-            print("\n🗣️ 4. Sending mock text query to Vertex AI...")
+            print("\n🗣️ 4. Sending test prompt to Gemini Live (Vertex via ADK)...")
             
             await websocket.send(json.dumps({
                 "type": "activity_start",
@@ -75,7 +92,7 @@ async def test_live_websocket():
             
             await websocket.send(json.dumps({
                 "type": "text_message",
-                "payload": {"text": "What is this?"}
+                "payload": {"text": prompt}
             }))
             
             await websocket.send(json.dumps({
@@ -84,11 +101,15 @@ async def test_live_websocket():
             }))
             
             # Wait for response (transcript or audio)
-            print("\n⏳ 5. Waiting for Google Vertex AI response (Story Mode)...")
+            print(f"\n⏳ 5. Waiting for Gemini reply (timeout: {timeout}s)...")
             audio_data = bytearray()
             
             while True:
-                res = await websocket.recv()
+                try:
+                    res = await asyncio.wait_for(websocket.recv(), timeout=timeout)
+                except asyncio.TimeoutError:
+                    print(f"❌ Timeout: No Gemini response received within {timeout} seconds.")
+                    break
                 msg = json.loads(res)
                 
                 if msg.get("type") == "transcript_out":
@@ -116,4 +137,23 @@ async def test_live_websocket():
         print(f"❌ Connection failed. Is the server running? Error: {e}")
 
 if __name__ == "__main__":
-    asyncio.run(test_live_websocket())
+    parser = argparse.ArgumentParser(description="Test Gemini Live on Vertex via backend ADK websocket.")
+    parser.add_argument(
+        "--prompt",
+        default=TEST_PROMPT,
+        help="Prompt sent as text_message to Gemini Live.",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["story", "learn", "explorer"],
+        default=DEFAULT_MODE,
+        help="App mode injected into DB session context.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=RESPONSE_TIMEOUT_SECONDS,
+        help="Seconds to wait for Gemini reply before timing out.",
+    )
+    args = parser.parse_args()
+    asyncio.run(test_live_websocket(prompt=args.prompt, mode=args.mode, timeout=args.timeout))

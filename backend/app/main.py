@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from app.core.config import settings
 from app.api import auth, settings as api_settings, discoveries, activity, devices, media, websockets
+import logging
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -32,6 +33,11 @@ def on_startup():
     os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "TRUE"
     os.environ["GOOGLE_CLOUD_PROJECT"] = settings.GOOGLE_CLOUD_PROJECT
     os.environ["GOOGLE_CLOUD_LOCATION"] = settings.GOOGLE_CLOUD_LOCATION
+
+    # Enable verbose ADK/GenAI execution tracing for debugging.
+    logging.getLogger("google.adk").setLevel(logging.DEBUG)
+    logging.getLogger("google.genai").setLevel(logging.DEBUG)
+    logging.getLogger("google").setLevel(logging.DEBUG)
 
 @app.get("/healthz")
 def health_check():
