@@ -26,7 +26,7 @@ String upload_url = String("http://") + host_ip + ":" + port + "/api/v1/device/m
 WebSocketsClient webSocket;
 
 // Hardware State
-const int BUTTON_PIN = 12; // GPIO for pushbutton (switches to GND)
+const int BUTTON_PIN = 42; // GPIO for pushbutton (switches to GND)
 bool is_recording = false;
 bool was_button_pressed = false;
 
@@ -160,8 +160,15 @@ void setup() {
 
     Serial.println("\n--- Kids Pokédex ESP32 Booting ---");
 
-    initCamera();
-    initAudio();
+    bool camera_ok = initCamera();
+    bool audio_ok = initAudio();
+
+    if (!camera_ok) {
+        Serial.println("[BOOT] Camera init failed. Check XCLK/HREF and camera ribbon orientation.");
+    }
+    if (!audio_ok) {
+        Serial.println("[BOOT] Audio init failed. Check mic/speaker wiring.");
+    }
 
     // Connect to WiFi
     WiFi.begin(ssid, password);

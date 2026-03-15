@@ -5,28 +5,29 @@
 #include <driver/i2s.h>
 
 // ---------------------------------------------------------------- //
-// I2S Audio Pin Mapping (Example: MAX98357A Speaker & INMP441 Mic)
+// I2S Audio Pin Mapping for ESP32-S3 N16R8 board with camera breakout
+// Mic: INMP441
+// Speaker amp: MAX98357A
 // ---------------------------------------------------------------- //
 #define I2S_PORT_RX I2S_NUM_0
 #define I2S_PORT_TX I2S_NUM_1
 
 // Microphone Pins (I2S_NUM_0)
-#define I2S_MIC_WS  15
-#define I2S_MIC_SD  13
-#define I2S_MIC_SCK 14
+#define I2S_MIC_WS  35
+#define I2S_MIC_SD  36
+#define I2S_MIC_SCK 37
 
 // Speaker Pins (I2S_NUM_1)
-#define I2S_SPK_BCLK 27
-#define I2S_SPK_LRC  26
-#define I2S_SPK_DOUT 25
+#define I2S_SPK_BCLK 38
+#define I2S_SPK_LRC  39
+#define I2S_SPK_DOUT 41
 
-// Audio settings required by Gemini Live 
+// Audio settings required by Gemini Live
 #define MIC_SAMPLE_RATE 16000
 #define SPK_SAMPLE_RATE 24000
 #define BITS_PER_SAMPLE I2S_BITS_PER_SAMPLE_16BIT
 
 bool initAudio() {
-    // 1. Configure the Microphone (RX)
     i2s_config_t i2s_config_rx = {
         .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
         .sample_rate = MIC_SAMPLE_RATE,
@@ -34,15 +35,15 @@ bool initAudio() {
         .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
         .communication_format = I2S_COMM_FORMAT_STAND_I2S,
         .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-        .dma_buf_count = 4,   // Number of DMA buffers
-        .dma_buf_len = 1024,  // Length of each buffer
+        .dma_buf_count = 4,
+        .dma_buf_len = 1024,
         .use_apll = false
     };
 
     i2s_pin_config_t pin_config_rx = {
         .bck_io_num = I2S_MIC_SCK,
         .ws_io_num = I2S_MIC_WS,
-        .data_out_num = -1, // Not used
+        .data_out_num = -1,
         .data_in_num = I2S_MIC_SD
     };
 
@@ -55,7 +56,6 @@ bool initAudio() {
         return false;
     }
 
-    // 2. Configure the Speaker (TX)
     i2s_config_t i2s_config_tx = {
         .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
         .sample_rate = SPK_SAMPLE_RATE,
@@ -72,7 +72,7 @@ bool initAudio() {
         .bck_io_num = I2S_SPK_BCLK,
         .ws_io_num = I2S_SPK_LRC,
         .data_out_num = I2S_SPK_DOUT,
-        .data_in_num = -1 // Not used
+        .data_in_num = -1
     };
 
     if (i2s_driver_install(I2S_PORT_TX, &i2s_config_tx, 0, NULL) != ESP_OK) {
