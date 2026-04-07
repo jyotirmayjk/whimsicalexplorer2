@@ -15,7 +15,7 @@ const char* password = "YOUR_WIFI_PASSWORD"; // <--- CHANGE ME
 
 // Replace with your local machine's IP address where FastAPI is running
 // Run 'ifconfig' (Mac/Linux) or 'ipconfig' (Windows) to find it
-const char* host_ip = "192.168.1.100";      // <--- CHANGE ME
+const char* host_ip = "xxx.xxx.xx.xxx";      // <--- CHANGE ME
 const int port = 8000;
 const char* device_uid = "ESP32_TOY_001";
 
